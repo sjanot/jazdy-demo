@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jazdy – digitálne stazky</title>
+<meta name="description" content="Demo: vodič zapisuje jazdy a tankovanie v mobile, kancelária má hneď prehľad a mesačný výkaz.">
+<meta name="theme-color" content="#14213d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="Jazdy – digitálne stazky (demo)">
+<meta property="og:description" content="Vodič zapíše jazdu v mobile, kancelária má hneď prehľad a mesačný výkaz.">
+<meta property="og:image" content="icon-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#14213d; --ink-2:#24365e; --paper:#f4efe4; --card:#fffdf8; --line:#e4dccb; --line-2:#d6ccb6;
+  --muted:#6c6f7a; --accent:#ff7a1a; --accent-soft:#ffe6d2; --ok:#23895c; --ok-soft:#dcf1e6; --err:#c8372d; --err-soft:#fbe3e0;
+  --d1:#14213d; --d2:#ff7a1a; --d3:#2a9d8f;
+  --r:18px; --shadow:0 1px 0 rgba(20,33,61,.04), 0 10px 30px -12px rgba(20,33,61,.18);
+  --f-head:"Bricolage Grotesque",system-ui,sans-serif; --f-body:"Manrope",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at 1px 1px, rgba(20,33,61,.07) 1px, transparent 0);background-size:22px 22px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:8px}
+.mono{font-family:var(--f-mono);font-feature-settings:"tnum"}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:14px;padding:16px max(16px,env(safe-area-inset-left));max-width:1360px;margin:0 auto}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+.logo img{width:38px;height:38px;border-radius:10px}
+.logo b{font-family:var(--f-head);font-size:22px;font-weight:800;letter-spacing:-.02em}
+.logo small{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-top:-2px}
+.top .sp{flex:1}
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;padding:7px 13px;border-radius:999px;font-weight:700;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.ghost{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-weight:600;font-size:13px}
+.ghost:hover{border-color:var(--line-2)}
+
+.intro{max-width:1360px;margin:0 auto;padding:4px 16px 18px}
+.intro h1{font-family:var(--f-head);font-weight:800;font-size:clamp(28px,4.2vw,46px);letter-spacing:-.03em;line-height:1.02;margin:0 0 8px}
+.intro h1 em{font-style:normal;color:var(--accent)}
+.intro p{margin:0;color:var(--muted);max-width:640px;font-size:16px}
+
+.tabs{display:none}
+
+/* ---------- layout ---------- */
+.stage{max-width:1360px;margin:0 auto;padding:0 16px 48px;display:grid;grid-template-columns:400px 1fr;gap:32px;align-items:start}
+.phone-col{position:sticky;top:16px}
+.phone{background:#0d1528;border-radius:48px;padding:12px;box-shadow:0 40px 80px -30px rgba(20,33,61,.55), inset 0 0 0 2px #2b3a5f}
+.screen{background:var(--paper);border-radius:37px;height:min(800px,calc(100vh - 60px));overflow:hidden;position:relative;display:flex;flex-direction:column}
+.screen::before{content:"";position:absolute;top:0;left:0;right:0;height:48px;background:linear-gradient(var(--paper) 70%,transparent);z-index:4;pointer-events:none}
+.notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:30px;background:#0d1528;border-radius:20px;z-index:5}
+.phone-cap{text-align:center;font-size:12px;color:var(--muted);margin-top:12px;font-weight:600;letter-spacing:.04em}
+.phone-cap span{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;animation:pulse 1.6s infinite}
+
+/* ---------- driver app ---------- */
+.app{flex:1;overflow-y:auto;padding:52px 16px 28px;scrollbar-width:none}
+.app::-webkit-scrollbar{display:none}
+.d-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.avatar{width:44px;height:44px;border-radius:14px;background:var(--ink);color:#fff;display:grid;place-items:center;font-family:var(--f-head);font-weight:800;font-size:16px;flex:none}
+.d-head .who{flex:1;min-width:0}
+.d-head .who small{color:var(--muted);font-size:12px;font-weight:600;display:block}
+.d-head select{border:0;background:none;font-family:var(--f-head);font-size:20px;font-weight:800;letter-spacing:-.02em;padding:0;max-width:100%;appearance:none;-webkit-appearance:none}
+.d-head .chev{font-size:12px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.stat b{display:block;font-family:var(--f-mono);font-size:18px;letter-spacing:-.02em}
+.stat small{color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.go{padding:16px;margin-bottom:14px}
+.go h2{font-family:var(--f-head);font-size:20px;letter-spacing:-.02em;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.lbl{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:8px 11px;font-weight:600;font-size:13px;text-align:left;line-height:1.2}
+.chip small{display:block;color:var(--muted);font-weight:500;font-size:11px;font-family:var(--f-mono)}
+.chip[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:#fff}
+.chip[aria-pressed="true"] small{color:#b9c3dc}
+.field{position:relative}
+.inp{width:100%;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;font-size:16px;font-weight:600;transition:border-color .15s}
+.inp:focus{outline:none;border-color:var(--ink)}
+.inp.mono{font-size:17px}
+.inp[aria-invalid="true"]{border-color:var(--err);background:var(--err-soft)}
+.err{color:var(--err);font-size:12.5px;font-weight:600;margin-top:5px;min-height:0}
+.unit{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700;font-size:13px;pointer-events:none}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:14px;padding:15px;font-weight:800;font-size:16px;letter-spacing:-.01em;background:var(--ink);color:#fff;transition:transform .08s, background .15s}
+.btn:active{transform:scale(.98)}
+.btn.accent{background:var(--accent);color:#1b0f04}
+.btn.soft{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.mt{margin-top:14px}
+.gps{border:0;background:none;color:var(--ink-2);font-weight:700;font-size:12.5px;padding:4px 0;text-decoration:underline;text-underline-offset:3px}
+
+.live{padding:16px;margin-bottom:14px;background:var(--ink);color:#fff;border:0}
+.live .tag{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.live .tag i{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.4s infinite}
+.live .timer{font-family:var(--f-mono);font-size:40px;font-weight:700;letter-spacing:-.03em;margin:10px 0 2px}
+.live .meta{color:#b9c3dc;font-size:13px}
+.live .lbl{color:#b9c3dc}
+.live .inp{background:#1d2c50;border-color:#33456f;color:#fff}
+.live .inp:focus{border-color:var(--accent)}
+.live .inp[aria-invalid="true"]{border-color:#ff8a80;background:#3a2238}
+.live .err{color:#ffb4aa}
+.live .unit{color:#8ea0c8}
+.dist{display:flex;align-items:baseline;justify-content:space-between;margin-top:12px;padding:12px 14px;background:rgba(255,255,255,.06);border-radius:12px}
+.dist b{font-family:var(--f-mono);font-size:24px;color:var(--accent)}
+.link{border:0;background:none;color:#b9c3dc;font-weight:600;font-size:13px;margin:10px auto 0;display:block;text-decoration:underline;text-underline-offset:3px}
+
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.qa{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:14px;border-radius:16px;border:1px solid var(--line);background:var(--card);text-align:left;font-weight:700}
+.qa .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);font-size:18px}
+.qa small{color:var(--muted);font-weight:500;font-size:12px}
+
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;margin:6px 2px 8px}
+.sec-h h3{font-family:var(--f-head);font-size:17px;margin:0;letter-spacing:-.01em}
+.sec-h small{color:var(--muted);font-size:12px;font-weight:600}
+.day{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:14px 2px 6px}
+.trip{display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:6px}
+.trip .rt{flex:1;min-width:0}
+.trip .rt b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trip .rt small{color:var(--muted);font-size:12px}
+.trip .km{font-family:var(--f-mono);font-weight:700;font-size:15px;white-space:nowrap}
+.trip.fuel .km{color:var(--d3)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line-2)}
+.dot.ok{background:var(--ok)}
+.empty{padding:22px 16px;text-align:center;color:var(--muted);border:1.5px dashed var(--line-2);border-radius:16px;font-size:14px}
+
+/* sheet */
+.scrim{position:absolute;inset:0;background:rgba(13,21,40,.45);z-index:20;display:flex;align-items:flex-end;animation:fade .2s}
+.sheet{background:var(--paper);width:100%;border-radius:26px 26px 0 0;padding:10px 16px 22px;max-height:88%;overflow-y:auto;animation:up .25s cubic-bezier(.2,.9,.3,1)}
+.grab{width:42px;height:5px;background:var(--line-2);border-radius:5px;margin:2px auto 12px}
+.sheet h2{font-family:var(--f-head);font-size:22px;margin:0 0 4px;letter-spacing:-.02em}
+.sheet p{margin:0;color:var(--muted);font-size:13px}
+
+.toast{position:absolute;left:16px;right:16px;bottom:18px;z-index:30;pointer-events:none;background:var(--ok);color:#fff;padding:13px 16px;border-radius:14px;font-weight:700;box-shadow:0 12px 30px -10px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center;animation:up .25s}
+
+/* ---------- office ---------- */
+.office{min-width:0}
+.o-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
+.o-head h2{font-family:var(--f-head);font-size:28px;font-weight:800;letter-spacing:-.03em;margin:0;flex:1;min-width:220px}
+.o-head h2 small{display:block;font-family:var(--f-body);font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.month{display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.month button{border:0;background:none;padding:9px 12px;font-weight:800}
+.month span{font-weight:700;min-width:120px;text-align:center;text-transform:capitalize}
+.sel{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:9px 12px;font-weight:600;font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi{padding:16px 18px}
+.kpi small{display:block;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
+.kpi b{display:block;font-family:var(--f-mono);font-size:28px;letter-spacing:-.03em;margin:6px 0 2px}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.kpi.hl{background:var(--ink);color:#fff;border-color:var(--ink)}
+.kpi.hl small,.kpi.hl span{color:#b9c3dc}
+.panel{padding:18px;margin-bottom:16px}
+.panel-h{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
+.panel-h h3{font-family:var(--f-head);font-size:18px;margin:0;flex:1;letter-spacing:-.01em}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chart svg{width:100%;height:auto;display:block}
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}
+.tbl-wrap{overflow-x:auto;margin:0 -18px;padding:0 18px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:800;padding:8px 10px;border-bottom:1.5px solid var(--line);white-space:nowrap}
+th button{border:0;background:none;padding:0;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--f-mono);white-space:nowrap}
+td .sub{display:block;color:var(--muted);font-size:12px}
+tr.flash td{animation:flash 2.4s ease-out}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;border:0;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.wait{background:var(--accent-soft);color:#a24a06}
+button.pill.wait:hover{background:#ffd6b5}
+.who-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px}
+.more{margin-top:12px;text-align:center}
+.veh{display:flex;flex-direction:column;gap:10px}
+.vrow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.vrow b{font-size:14px}
+.vrow .plate{white-space:nowrap;font-family:var(--f-mono);font-size:11.5px;border:1.5px solid var(--ink);border-radius:5px;padding:1px 6px;font-weight:700;margin-left:6px}
+.vrow .big{font-family:var(--f-mono);font-weight:700;text-align:right}
+.vrow small{color:var(--muted);font-size:12px}
+.bar{grid-column:1/-1;height:6px;background:var(--paper);border-radius:6px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.abtn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 13px;font-weight:700;font-size:13.5px}
+.abtn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+.abtn:hover{border-color:var(--line-2)}
+.livedot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite;flex:none}
+.note{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;margin-top:4px}
+.foot{max-width:1360px;margin:0 auto;padding:0 16px 40px;color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:6px 16px}
+.foot a{color:var(--ink);font-weight:700}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}}
+@keyframes flash{0%{background:var(--accent-soft)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* ---------- responsive ---------- */
+@media (max-width:1180px){ .kpis{grid-template-columns:repeat(2,1fr)} .grid2{grid-template-columns:1fr} }
+@media (max-width:980px){
+  .screen::before{display:none}
+  .stage{grid-template-columns:1fr;gap:0}
+  .tabs{display:flex;position:sticky;top:0;z-index:40;background:var(--paper);padding:8px 16px 12px;max-width:1360px;margin:0 auto}
+  .tabs .seg{width:100%}
+  .tabs .seg button{flex:1;padding:10px;font-size:14px}
+  body[data-view="driver"] .office{display:none}
+  body[data-view="office"] .phone-col{display:none}
+  .phone-col{position:static}
+  .phone{background:none;padding:0;box-shadow:none;border-radius:0}
+  .screen{border-radius:0;height:auto;overflow:visible;background:transparent}
+  .notch,.phone-cap{display:none}
+  .app{padding:4px 0 24px;overflow:visible}
+  .scrim{position:fixed}
+  .toast{position:fixed}
+  .intro p{font-size:14.5px}
+}
+@media (max-width:560px){
+  .top .ghost{display:none}
+  .o-head h2{font-size:24px}
+  .kpi b{font-size:22px}
+  .hide-sm{display:none}
+}
+
+/* ---------- print report ---------- */
+#report{display:none}
+@media print{
+  @page{size:A4;margin:14mm}
+  body{background:#fff}
+  body > *:not(#report){display:none!important}
+  #report{display:block;font-size:11px;color:#000}
+  #report h1{font-family:var(--f-head);font-size:20px;margin:0}
+  #report .rh{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
+  #report table{font-size:10.5px}
+  #report th,#report td{padding:5px 6px;border-bottom:1px solid #bbb}
+  #report .tot td{font-weight:800;border-top:2px solid #000}
+  #report .sign{display:flex;gap:40px;margin-top:40px}
+  #report .sign div{flex:1;border-top:1px solid #000;padding-top:4px;text-align:center}
+}
+</style>
+</head>
+<body data-view="driver">
+<header class="top">
+  <a class="logo" href="#" aria-label="Jazdy">
+    <img src="icon.svg" alt="">
+    <span><b>Jazdy</b><small data-t="tagline"></small></span>
+  </a>
+  <span class="sp"></span>
+  <div class="seg" role="group" aria-label="Jazyk / Sprache">
+    <button type="button" data-action="lang" data-v="sk" aria-pressed="true">SK</button>
+    <button type="button" data-action="lang" data-v="de" aria-pressed="false">DE</button>
+  </div>
+  <button type="button" class="ghost" data-action="reset" data-t="reset"></button>
+</header>
+
+<section class="intro">
+  <h1 data-t-html="h1"></h1>
+  <p data-t="lead"></p>
+</section>
+
+<nav class="tabs" aria-label="Pohľad">
+  <div class="seg" role="group">
+    <button type="button" data-action="view" data-v="driver" aria-pressed="true" data-t="tabDriver"></button>
+    <button type="button" data-action="view" data-v="office" aria-pressed="false" data-t="tabOffice"></button>
+  </div>
+</nav>
+
+<main class="stage">
+  <div class="phone-col">
+    <div class="phone">
+      <div class="screen" id="screen">
+        <div class="notch" aria-hidden="true"></div>
+        <div class="app" id="driver" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="phone-cap"><span></span><b data-t="phoneCap"></b></div>
+  </div>
+  <section class="office" id="office" aria-label="Kancelária"></section>
+</main>
+
+<footer class="foot">
+  <span data-t="footDemo"></span>
+  <span>IT-DK s. r. o. · <a href="https://it-dk.sk" target="_blank" rel="noopener">it-dk.sk</a> · <a href="mailto:info@it-dk.sk">info@it-dk.sk</a></span>
+</footer>
+
+<div id="report" aria-hidden="true"></div>
+
+<script>
+"use strict";
+/* ============ i18n ============ */
+const T = {
+  sk: {
+    tagline:"demo · IT-DK", reset:"Obnoviť demo",
+    h1:"Stazky bez papiera.<br><em>Vodič ťukne, kancelária vidí.</em>",
+    lead:"Vyskúšajte si to: appka vodiča v mobile a pohľad kancelárie sú prepojené. Keď zapíšete jazdu alebo tankovanie, hneď sa objaví v prehľade a v mesačnom výkaze.",
+    tabDriver:"Vodič (mobil)", tabOffice:"Kancelária",
+    phoneCap:"Takto to vidí vodič v telefóne",
+    footDemo:"Ukážka s vymyslenými dátami – nič sa nikam neodosiela, všetko ostáva vo vašom prehliadači.",
+    hello:"Prihlásený vodič", statMonth:"km mesiac", statTrips:"jázd", statToday:"km dnes",
+    newTrip:"Nová jazda", vehicle:"Vozidlo", kmStart:"Stav tachometra", from:"Odkiaľ", purpose:"Účel jazdy",
+    start:"Štart jazdy", myPos:"Použiť moju polohu", locating:"Zisťujem polohu…", locFail:"Polohu sa nepodarilo zistiť, napíšte miesto ručne.",
+    onRoad:"Na ceste", since:"od", to:"Kam", kmEnd:"Konečný stav tachometra", distance:"Najazdené",
+    finish:"Ukončiť a uložiť jazdu", cancel:"Zrušiť jazdu", cancelQ:"Naozaj zrušiť rozbehnutú jazdu? Nič sa neuloží.",
+    fuel:"Tankovanie", fuelSub:"litre, cena, bloček", allTrips:"Výkaz", allTripsSub:"mesačný súhrn",
+    myTrips:"Moje jazdy", last:"posledné", noTrips:"Zatiaľ žiadne jazdy. Začnite prvou jazdou hore.",
+    today:"Dnes", yesterday:"Včera",
+    fuelTitle:"Tankovanie", fuelLead:"Zapíšte údaje z bločku – spotreba sa vypočíta sama.",
+    liters:"Natankované", price:"Suma spolu", station:"Čerpacia stanica", kmNow:"Stav tachometra",
+    save:"Uložiť tankovanie", close:"Zavrieť",
+    eReq:"Vyplňte toto pole.", eKm:"Zadajte číslo tachometra.", eKmLow:"Musí byť viac ako počiatočný stav ({n} km).",
+    eKmBack:"Tachometer nemôže ísť dozadu – posledný stav bol {n} km.", eNum:"Zadajte kladné číslo.", eBig:"Jazda vyše 1 500 km? Skontrolujte číslo.",
+    tSaved:"Jazda uložená – kancelária ju už vidí", tFuel:"Tankovanie uložené", tStart:"Jazda spustená, šťastnú cestu!", tCancel:"Jazda zrušená",
+    tApproved:"Jazda schválená", tApprovedAll:"Schválené všetky jazdy ({n})", tCsv:"Výkaz stiahnutý (CSV pre Excel)", tReset:"Demo dáta obnovené",
+    purposes:{delivery:"Rozvoz",service:"Servis u zákazníka",pickup:"Vyzdvihnutie",ret:"Návrat do firmy",other:"Iné"},
+    office:"Kancelária", overview:"Prehľad jázd", allDrivers:"Všetci vodiči", allVehicles:"Všetky vozidlá",
+    kTrips:"Jazdy", kKm:"Najazdené", kFuel:"Tankovanie", kCons:"Priem. spotreba", kWait:"čaká na schválenie", kPerTrip:"Ø {n} km na jazdu",
+    kLit:"{n} l", kNoFuel:"bez tankovania",
+    chart:"Kilometre po dňoch", vehicles:"Vozidlá v mesiaci",
+    trips:"Jazdy", date:"Dátum", driver:"Vodič", route:"Trasa", odo:"Tachometer", km:"km", state:"Stav",
+    approved:"Schválené", approve:"Schváliť", approveAll:"Schváliť všetko", showAll:"Zobraziť všetky ({n})", showLess:"Zobraziť menej",
+    csv:"Export do Excelu", print:"Tlačiť výkaz (PDF)", noRows:"V tomto mesiaci nie sú žiadne jazdy pre zvolený filter.",
+    live:"Zmeny z mobilu sa tu zobrazia okamžite",
+    repTitle:"Mesačný výkaz jázd", repDriver:"Vodič", repVehicle:"Vozidlo", repTotal:"Spolu", repSignD:"Podpis vodiča", repSignO:"Schválil (kancelária)",
+    consumption:"l/100 km", resetQ:"Obnoviť demo? Vaše zapísané jazdy sa zmažú a nahrádzajú sa ukážkovými.",
+    depot:"Sídlo firmy", noData:"—"
+  },
+  de: {
+    tagline:"Demo · IT-DK", reset:"Demo zurücksetzen",
+    h1:"Fahrtenbuch ohne Papier.<br><em>Fahrer tippt, Büro sieht's.</em>",
+    lead:"Probieren Sie es aus: Fahrer-App auf dem Handy und Büro-Ansicht sind verbunden. Jede Fahrt und jede Tankung erscheint sofort in der Übersicht und im Monatsbericht.",
+    tabDriver:"Fahrer (Handy)", tabOffice:"Büro",
+    phoneCap:"So sieht es der Fahrer auf dem Handy",
+    footDemo:"Demo mit erfundenen Daten – nichts wird gesendet, alles bleibt in Ihrem Browser.",
+    hello:"Angemeldeter Fahrer", statMonth:"km Monat", statTrips:"Fahrten", statToday:"km heute",
+    newTrip:"Neue Fahrt", vehicle:"Fahrzeug", kmStart:"Kilometerstand", from:"Von", purpose:"Zweck der Fahrt",
+    start:"Fahrt starten", myPos:"Meinen Standort verwenden", locating:"Standort wird ermittelt…", locFail:"Standort nicht verfügbar, bitte Ort eintippen.",
+    onRoad:"Unterwegs", since:"seit", to:"Nach", kmEnd:"Kilometerstand am Ende", distance:"Gefahren",
+    finish:"Fahrt beenden und speichern", cancel:"Fahrt abbrechen", cancelQ:"Laufende Fahrt wirklich abbrechen? Es wird nichts gespeichert.",
+    fuel:"Tanken", fuelSub:"Liter, Betrag, Beleg", allTrips:"Bericht", allTripsSub:"Monatsübersicht",
+    myTrips:"Meine Fahrten", last:"letzte", noTrips:"Noch keine Fahrten. Starten Sie oben die erste Fahrt.",
+    today:"Heute", yesterday:"Gestern",
+    fuelTitle:"Tanken", fuelLead:"Daten vom Beleg eintragen – der Verbrauch wird automatisch berechnet.",
+    liters:"Getankt", price:"Betrag gesamt", station:"Tankstelle", kmNow:"Kilometerstand",
+    save:"Tankung speichern", close:"Schließen",
+    eReq:"Bitte ausfüllen.", eKm:"Bitte Kilometerstand eingeben.", eKmLow:"Muss größer sein als der Startstand ({n} km).",
+    eKmBack:"Der Kilometerstand kann nicht sinken – zuletzt {n} km.", eNum:"Bitte eine positive Zahl eingeben.", eBig:"Über 1.500 km? Bitte prüfen.",
+    tSaved:"Fahrt gespeichert – das Büro sieht sie schon", tFuel:"Tankung gespeichert", tStart:"Fahrt gestartet, gute Fahrt!", tCancel:"Fahrt abgebrochen",
+    tApproved:"Fahrt freigegeben", tApprovedAll:"Alle Fahrten freigegeben ({n})", tCsv:"Bericht heruntergeladen (CSV für Excel)", tReset:"Demodaten zurückgesetzt",
+    purposes:{delivery:"Auslieferung",service:"Kundendienst",pickup:"Abholung",ret:"Rückfahrt",other:"Sonstiges"},
+    office:"Büro", overview:"Fahrtenübersicht", allDrivers:"Alle Fahrer", allVehicles:"Alle Fahrzeuge",
+    kTrips:"Fahrten", kKm:"Gefahren", kFuel:"Tanken", kCons:"Ø Verbrauch", kWait:"warten auf Freigabe", kPerTrip:"Ø {n} km pro Fahrt",
+    kLit:"{n} l", kNoFuel:"keine Tankung",
+    chart:"Kilometer pro Tag", vehicles:"Fahrzeuge im Monat",
+    trips:"Fahrten", date:"Datum", driver:"Fahrer", route:"Strecke", odo:"Km-Stand", km:"km", state:"Status",
+    approved:"Freigegeben", approve:"Freigeben", approveAll:"Alle freigeben", showAll:"Alle anzeigen ({n})", showLess:"Weniger anzeigen",
+    csv:"Export nach Excel", print:"Bericht drucken (PDF)", noRows:"Keine Fahrten in diesem Monat für den gewählten Filter.",
+    live:"Änderungen vom Handy erscheinen hier sofort",
+    repTitle:"Monatlicher Fahrtenbericht", repDriver:"Fahrer", repVehicle:"Fahrzeug", repTotal:"Summe", repSignD:"Unterschrift Fahrer", repSignO:"Freigegeben (Büro)",
+    consumption:"l/100 km", resetQ:"Demo zurücksetzen? Ihre eingetragenen Fahrten werden durch Beispieldaten ersetzt.",
+    depot:"Firmensitz", noData:"—"
+  }
+};
+
+/* ============ helpers ============ */
+const KEY = "jazdy-demo-v3";
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+let S, ui;
+const t = (k, vars) => { let s = (T[S.lang] && T[S.lang][k]) ?? T.sk[k] ?? k; if (vars) for (const [a, b] of Object.entries(vars)) s = s.replace("{" + a + "}", b); return s; };
+const loc = () => S.lang === "de" ? "de-DE" : "sk-SK";
+const nf = (n, d = 0) => Number(n).toLocaleString(loc(), { minimumFractionDigits: d, maximumFractionDigits: d });
+const eur = n => Number(n).toLocaleString(loc(), { style: "currency", currency: "EUR" });
+const fmtTime = iso => new Date(iso).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit" });
+const fmtDate = (iso, o) => new Date(iso).toLocaleDateString(loc(), o || { day: "numeric", month: "numeric" });
+const dayKey = d => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
+const monthKey = d => dayKey(d).slice(0, 7);
+const initials = n => n.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
+const driverColor = id => ({ d1: "var(--d1)", d2: "var(--d2)", d3: "var(--d3)" }[id] || "var(--muted)");
+
+/* ============ demo data ============ */
+const PLACES = {
+  "HQ":[48.249,11.651], "München":[48.137,11.575], "Augsburg":[48.371,10.898], "Ingolstadt":[48.766,11.426],
+  "Landshut":[48.537,12.152], "Rosenheim":[47.857,12.128], "Freising":[48.403,11.749], "Regensburg":[49.013,12.101],
+  "Erding":[48.306,11.906], "Dachau":[48.260,11.434], "Starnberg":[47.998,11.340], "Moosburg":[48.470,11.937]
+};
+const placeName = p => p === "HQ" ? t("depot") : p;
+function roadKm(a, b) {
+  const A = PLACES[a], B = PLACES[b]; if (!A || !B) return 40;
+  const R = 6371, r = Math.PI / 180, dLa = (B[0] - A[0]) * r, dLo = (B[1] - A[1]) * r;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(A[0] * r) * Math.cos(B[0] * r) * Math.sin(dLo / 2) ** 2;
+  return Math.max(6, Math.round(2 * R * Math.asin(Math.sqrt(h)) * 1.28));
+}
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let x = Math.imul(seed ^ seed >>> 15, 1 | seed); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; }; }
+
+function seed() {
+  const R = rng(20261013);
+  const pick = a => a[Math.floor(R() * a.length)];
+  const drivers = [{ id: "d1", name: "Ján J." }, { id: "d2", name: "Maroš P." }, { id: "d3", name: "Thomas K." }];
+  const vehicles = [
+    { id: "v1", name: "Mercedes Sprinter", plate: "FS-JT 214", cons: 9.6, odo: 84210 },
+    { id: "v2", name: "VW Crafter", plate: "FS-JT 377", cons: 10.4, odo: 121480 },
+    { id: "v3", name: "MAN TGL 8.190", plate: "FS-JT 512", cons: 18.2, odo: 203950 }
+  ];
+  const trips = [], fuel = [];
+  const sinceFuel = { v1: 120, v2: 260, v3: 80 };
+  const stations = ["Aral", "Shell", "JET", "Esso", "TotalEnergies"];
+  const purposes = ["delivery", "delivery", "delivery", "service", "pickup"];
+  const now = new Date();
+  const startD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // today 00:00 – seed until yesterday
+  for (let d = new Date(startD); d < end; d.setDate(d.getDate() + 1)) {
+    const wd = d.getDay(); if (wd === 0 || wd === 6) continue;
+    drivers.forEach((dr, i) => {
+      if (R() < 0.08) return; // day off
+      const v = vehicles[R() < 0.88 ? i : (i + 1) % 3];
+      let pos = "HQ"; let clock = new Date(d); clock.setHours(6, 10 + Math.floor(R() * 50), 0, 0);
+      const stops = 1 + Math.floor(R() * 2.4);
+      const route = [];
+      for (let s = 0; s < stops; s++) { let p; do p = pick(Object.keys(PLACES)); while (p === "HQ" || p === pos || route.includes(p)); route.push(p); }
+      route.push("HQ");
+      route.forEach(dest => {
+        const km = roadKm(pos, dest) + Math.floor(R() * 6);
+        const st = new Date(clock);
+        const en = new Date(st.getTime() + (km / 58 * 60 + 8 + R() * 12) * 60000);
+        const kmStart = v.odo; v.odo += km;
+        const tr = { id: uid(), driverId: dr.id, vehicleId: v.id, start: st.toISOString(), end: en.toISOString(), from: pos, to: dest, kmStart, kmEnd: v.odo, purpose: dest === "HQ" ? "ret" : pick(purposes), approved: (end - en) > 3 * 864e5 };
+        trips.push(tr);
+        sinceFuel[v.id] += km;
+        if (sinceFuel[v.id] > (v.id === "v3" ? 520 : 640) && dest !== "HQ") {
+          const l = Math.round(sinceFuel[v.id] * v.cons / 100 * (0.94 + R() * 0.12) * 10) / 10;
+          fuel.push({ id: uid(), driverId: dr.id, vehicleId: v.id, date: new Date(en.getTime() + 10 * 60000).toISOString(), liters: l, price: Math.round(l * (1.61 + R() * 0.13) * 100) / 100, km: v.odo, station: pick(stations) + " " + dest });
+          sinceFuel[v.id] = 0;
+        }
+        pos = dest; clock = new Date(en.getTime() + (25 + R() * 70) * 60000);
+      });
+    });
+  }
+  return { v: 3, lang: "sk", me: "d1", drivers, vehicles, trips, fuel, active: null };
+}
+
+/* ============ state ============ */
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) { const s = JSON.parse(raw); if (s && s.v === 3) return s; } } catch (e) { /* storage unavailable */ }
+  return seed();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable – demo still works in memory */ } }
+S = load();
+const now0 = new Date();
+ui = { view: "driver", month: monthKey(now0), fDriver: "", fVehicle: "", showAll: false, sort: { k: "start", dir: -1 }, form: {}, errors: {}, sheet: false, flash: null, toastT: null, purpose: "delivery" };
+
+const veh = id => S.vehicles.find(v => v.id === id);
+const drv = id => S.drivers.find(d => d.id === id);
+function lastOdo(vehicleId) {
+  let m = veh(vehicleId).odo ?? 0;
+  for (const tr of S.trips) if (tr.vehicleId === vehicleId && tr.kmEnd > m) m = tr.kmEnd;
+  for (const f of S.fuel) if (f.vehicleId === vehicleId && f.km > m) m = f.km;
+  return m;
+}
+function lastPlace(driverId) {
+  const mine = S.trips.filter(x => x.driverId === driverId).sort((a, b) => b.end.localeCompare(a.end));
+  return mine[0] ? mine[0].to : "HQ";
+}
+function myVehicle() {
+  const mine = S.trips.filter(x => x.driverId === S.me).sort((a, b) => b.end.localeCompare(a.end));
+  return mine[0] ? mine[0].vehicleId : S.vehicles[0].id;
+}
+
+/* ============ toast ============ */
+function toast(msg) {
+  document.querySelectorAll(".toast").forEach(n => n.remove());
+  const el = document.createElement("div");
+  el.className = "toast"; el.setAttribute("role", "status");
+  el.innerHTML = '<span aria-hidden="true">✓</span>';
+  const s = document.createElement("span"); s.textContent = msg; el.appendChild(s);
+  (window.matchMedia("(max-width:980px)").matches ? document.body : $("#screen")).appendChild(el);
+  clearTimeout(ui.toastT); ui.toastT = setTimeout(() => el.remove(), 2800);
+}
+
+/* ============ driver view ============ */
+function fieldHTML(name, label, { type = "text", unit = "", mode = "text", ph = "", mono = false, val } = {}) {
+  const v = val !== undefined ? val : (ui.form[name] ?? "");
+  const e = ui.errors[name];
+  return `<label class="lbl" for="f-${name}">${esc(label)}</label>
+  <div class="field"><input class="inp ${mono ? "mono" : ""}" id="f-${name}" name="${name}" type="${type}" inputmode="${mode}" placeholder="${esc(ph)}" value="${esc(v)}" autocomplete="off" ${e ? 'aria-invalid="true" aria-describedby="e-' + name + '"' : ""}>${unit ? `<span class="unit">${esc(unit)}</span>` : ""}</div>
+  ${e ? `<div class="err" id="e-${name}">${esc(e)}</div>` : ""}`;
+}
+
+function renderDriver() {
+  const me = drv(S.me);
+  const mk = monthKey(new Date()), tk = dayKey(new Date());
+  const mine = S.trips.filter(x => x.driverId === S.me);
+  const mMonth = mine.filter(x => monthKey(x.start) === mk);
+  const kmMonth = mMonth.reduce((a, x) => a + x.kmEnd - x.kmStart, 0);
+  const kmToday = mine.filter(x => dayKey(x.start) === tk).reduce((a, x) => a + x.kmEnd - x.kmStart, 0);
+  let h = `<div class="d-head">
+    <div class="avatar" aria-hidden="true">${esc(initials(me.name))}</div>
+    <div class="who"><small>${esc(t("hello"))}</small>
+      <label class="sr" for="me-sel">${esc(t("driver"))}</label>
+      <select id="me-sel" data-change="me">${S.drivers.map(d => `<option value="${d.id}" ${d.id === S.me ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select> <span class="chev" aria-hidden="true">▼</span>
+    </div></div>
+  <div class="stats">
+    <div class="stat"><b>${nf(kmMonth)}</b><small>${esc(t("statMonth"))}</small></div>
+    <div class="stat"><b>${nf(mMonth.length)}</b><small>${esc(t("statTrips"))}</small></div>
+    <div class="stat"><b>${nf(kmToday)}</b><small>${esc(t("statToday"))}</small></div>
+  </div>`;
+
+  const a = S.active && S.active.driverId === S.me ? S.active : null;
+  if (a) {
+    const v = veh(a.vehicleId);
+    const endVal = ui.form.kmEnd ?? "";
+    const dist = Number(endVal) > a.kmStart ? Number(endVal) - a.kmStart : 0;
+    h += `<section class="card live" aria-label="${esc(t("onRoad"))}">
+      <span class="tag"><i></i>${esc(t("onRoad"))}</span>
+      <div class="timer" id="timer">00:00:00</div>
+      <div class="meta">${esc(placeName(a.from))} · ${esc(v.name)} <span class="mono">${esc(v.plate)}</span> · ${esc(t("since"))} ${fmtTime(a.start)}<br>${esc(t("kmStart"))}: <span class="mono">${nf(a.kmStart)} km</span></div>
+      ${fieldHTML("to", t("to"), { ph: "Augsburg, Kunde …" })}
+      ${fieldHTML("kmEnd", t("kmEnd"), { mode: "numeric", unit: "km", mono: true, ph: String(a.kmStart + 35) })}
+      <div class="dist"><span>${esc(t("distance"))}</span><b id="dist">${nf(dist)} km</b></div>
+      <button type="button" class="btn accent mt" data-action="finish">${esc(t("finish"))}</button>
+      <button type="button" class="link" data-action="cancelTrip">${esc(t("cancel"))}</button>
+    </section>`;
+  } else {
+    const vSel = ui.form.vehicleId || myVehicle();
+    const kmStartVal = ui.form.kmStart ?? String(lastOdo(vSel));
+    const fromVal = ui.form.from ?? placeName(lastPlace(S.me));
+    h += `<section class="card go" aria-labelledby="nt-h">
+      <h2 id="nt-h">${esc(t("newTrip"))}</h2>
+      <span class="lbl" id="veh-l">${esc(t("vehicle"))}</span>
+      <div class="chips" role="group" aria-labelledby="veh-l">${S.vehicles.map(v => `<button type="button" class="chip" data-action="pickVeh" data-v="${v.id}" aria-pressed="${v.id === vSel}">${esc(v.name)}<small>${esc(v.plate)}</small></button>`).join("")}</div>
+      ${fieldHTML("kmStart", t("kmStart"), { mode: "numeric", unit: "km", mono: true, val: kmStartVal })}
+      ${fieldHTML("from", t("from"), { val: fromVal })}
+      <button type="button" class="gps" data-action="gps">📍 ${esc(t("myPos"))}</button>
+      <span class="lbl" id="pur-l">${esc(t("purpose"))}</span>
+      <div class="chips" role="group" aria-labelledby="pur-l">${Object.keys(T.sk.purposes).map(p => `<button type="button" class="chip" data-action="pickPurpose" data-v="${p}" aria-pressed="${ui.purpose === p}">${esc(t("purposes")[p])}</button>`).join("")}</div>
+      <button type="button" class="btn mt" data-action="startTrip">▶ ${esc(t("start"))}</button>
+    </section>`;
+  }
+
+  h += `<div class="quick">
+    <button type="button" class="qa" data-action="openFuel"><span class="ic" aria-hidden="true">⛽</span>${esc(t("fuel"))}<small>${esc(t("fuelSub"))}</small></button>
+    <button type="button" class="qa" data-action="view" data-v="office"><span class="ic" aria-hidden="true" style="background:#dbe4f5">📊</span>${esc(t("allTrips"))}<small>${esc(t("allTripsSub"))}</small></button>
+  </div>`;
+
+  const items = [
+    ...mine.map(x => ({ k: "t", at: x.start, x })),
+    ...S.fuel.filter(f => f.driverId === S.me).map(f => ({ k: "f", at: f.date, x: f }))
+  ].sort((p, q) => q.at.localeCompare(p.at)).slice(0, 14);
+  h += `<div class="sec-h"><h3>${esc(t("myTrips"))}</h3><small>${esc(t("last"))} ${items.length}</small></div>`;
+  if (!items.length) h += `<div class="empty">${esc(t("noTrips"))}</div>`;
+  let lastDay = "";
+  const td = dayKey(new Date()), yd = dayKey(new Date(Date.now() - 864e5));
+  for (const it of items) {
+    const dk = dayKey(it.at);
+    if (dk !== lastDay) { lastDay = dk; h += `<div class="day">${dk === td ? esc(t("today")) : dk === yd ? esc(t("yesterday")) : esc(fmtDate(it.at, { weekday: "short", day: "numeric", month: "numeric" }))}</div>`; }
+    if (it.k === "t") {
+      const x = it.x;
+      h += `<div class="trip"><span class="dot ${x.approved ? "ok" : ""}" title="${esc(x.approved ? t("approved") : t("kWait"))}"></span>
+        <div class="rt"><b>${esc(placeName(x.from))} → ${esc(placeName(x.to))}</b><small>${fmtTime(x.start)}–${fmtTime(x.end)} · ${esc(veh(x.vehicleId).plate)} · ${esc(t("purposes")[x.purpose] || "")}</small></div>
+        <span class="km">${nf(x.kmEnd - x.kmStart)} km</span></div>`;
+    } else {
+      const f = it.x;
+      h += `<div class="trip fuel"><span aria-hidden="true">⛽</span><div class="rt"><b>${esc(f.station || t("fuel"))}</b><small>${fmtTime(f.date)} · ${esc(veh(f.vehicleId).plate)} · ${eur(f.price)}</small></div><span class="km">${nf(f.liters, 1)} l</span></div>`;
+    }
+  }
+  $("#driver").innerHTML = h;
+  if (ui.sheet) renderSheet();
+  tick();
+}
+
+function renderSheet() {
+  const vSel = ui.form.fVehicle || (S.active && S.active.driverId === S.me ? S.active.vehicleId : myVehicle());
+  const el = document.createElement("div");
+  el.className = "scrim"; el.dataset.action = "closeSheetBg";
+  el.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-h">
+    <div class="grab" aria-hidden="true"></div>
+    <h2 id="sh-h">⛽ ${esc(t("fuelTitle"))}</h2><p>${esc(t("fuelLead"))}</p>
+    <span class="lbl" id="fv-l">${esc(t("vehicle"))}</span>
+    <div class="chips" role="group" aria-labelledby="fv-l">${S.vehicles.map(v => `<button type="button" class="chip" data-action="pickFVeh" data-v="${v.id}" aria-pressed="${v.id === vSel}">${esc(v.name)}<small>${esc(v.plate)}</small></button>`).join("")}</div>
+    <div class="row2"><div>${fieldHTML("liters", t("liters"), { mode: "decimal", unit: "l", mono: true, ph: "62,4" })}</div><div>${fieldHTML("price", t("price"), { mode: "decimal", unit: "€", mono: true, ph: "104,90" })}</div></div>
+    ${fieldHTML("fkm", t("kmNow"), { mode: "numeric", unit: "km", mono: true, val: ui.form.fkm ?? String(lastOdo(vSel)) })}
+    ${fieldHTML("station", t("station"), { ph: "Aral, Shell …" })}
+    <button type="button" class="btn accent mt" data-action="saveFuel">${esc(t("save"))}</button>
+    <button type="button" class="btn soft mt" data-action="closeSheet">${esc(t("close"))}</button>
+  </div>`;
+  const host = window.matchMedia("(max-width:980px)").matches ? document.body : $("#screen");
+  document.querySelectorAll(".scrim").forEach(n => n.remove());
+  host.appendChild(el);
+}
+
+function tick() {
+  const el = $("#timer"); if (!el || !S.active) return;
+  const s = Math.max(0, Math.floor((Date.now() - new Date(S.active.start)) / 1000));
+  el.textContent = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(n => String(n).padStart(2, "0")).join(":");
+}
+setInterval(tick, 1000);
+
+const num = v => { const n = Number(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : NaN; };
+
+/* ============ office view ============ */
+function monthLabel(mk) { const [y, m] = mk.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString(loc(), { month: "long", year: "numeric" }); }
+function shiftMonth(mk, d) { const [y, m] = mk.split("-").map(Number); return monthKey(new Date(y, m - 1 + d, 1)); }
+
+function filtered() {
+  const tr = S.trips.filter(x => monthKey(x.start) === ui.month && (!ui.fDriver || x.driverId === ui.fDriver) && (!ui.fVehicle || x.vehicleId === ui.fVehicle));
+  const fu = S.fuel.filter(x => monthKey(x.date) === ui.month && (!ui.fDriver || x.driverId === ui.fDriver) && (!ui.fVehicle || x.vehicleId === ui.fVehicle));
+  return { tr, fu };
+}
+
+function renderOffice() {
+  const { tr, fu } = filtered();
+  const km = tr.reduce((a, x) => a + x.kmEnd - x.kmStart, 0);
+  const lit = fu.reduce((a, x) => a + x.liters, 0), cost = fu.reduce((a, x) => a + x.price, 0);
+  const wait = tr.filter(x => !x.approved).length;
+  const cons = km > 0 && lit > 0 ? lit / km * 100 : null;
+  const curMonth = monthKey(new Date());
+
+  let h = `<div class="o-head">
+    <h2><small>${esc(t("office"))}</small>${esc(t("overview"))}</h2>
+    <div class="month"><button type="button" data-action="month" data-v="-1" aria-label="‹">‹</button><span>${esc(monthLabel(ui.month))}</span><button type="button" data-action="month" data-v="1" aria-label="›" ${ui.month >= curMonth ? "disabled" : ""}>›</button></div>
+    <label class="sr" for="fd">${esc(t("driver"))}</label>
+    <select class="sel" id="fd" data-change="fDriver"><option value="">${esc(t("allDrivers"))}</option>${S.drivers.map(d => `<option value="${d.id}" ${ui.fDriver === d.id ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select>
+    <label class="sr" for="fv">${esc(t("vehicle"))}</label>
+    <select class="sel" id="fv" data-change="fVehicle"><option value="">${esc(t("allVehicles"))}</option>${S.vehicles.map(v => `<option value="${v.id}" ${ui.fVehicle === v.id ? "selected" : ""}>${esc(v.plate)} · ${esc(v.name)}</option>`).join("")}</select>
+  </div>
+  <div class="kpis">
+    <div class="card kpi hl"><small>${esc(t("kKm"))}</small><b>${nf(km)} km</b><span>${esc(t("kPerTrip", { n: nf(tr.length ? km / tr.length : 0) }))}</span></div>
+    <div class="card kpi"><small>${esc(t("kTrips"))}</small><b>${nf(tr.length)}</b><span>${wait ? `<b style="display:inline;font:inherit;color:#a24a06">${nf(wait)}</b> ${esc(t("kWait"))}` : "✓ " + esc(t("approved"))}</span></div>
+    <div class="card kpi"><small>${esc(t("kFuel"))}</small><b>${eur(cost)}</b><span>${lit ? esc(t("kLit", { n: nf(lit, 1) })) : esc(t("kNoFuel"))}</span></div>
+    <div class="card kpi"><small>${esc(t("kCons"))}</small><b>${cons ? nf(cons, 1) : esc(t("noData"))}</b><span>${esc(t("consumption"))}</span></div>
+  </div>`;
+
+  // chart
+  const [yy, mm] = ui.month.split("-").map(Number);
+  const days = new Date(yy, mm, 0).getDate();
+  const per = Array.from({ length: days }, () => ({}));
+  for (const x of tr) { const d = new Date(x.start).getDate() - 1; per[d][x.driverId] = (per[d][x.driverId] || 0) + x.kmEnd - x.kmStart; }
+  const maxDay = Math.max(50, ...per.map(o => Object.values(o).reduce((a, b) => a + b, 0)));
+  const step = maxDay > 400 ? 200 : 100, top = Math.ceil(maxDay / step) * step;
+  const W = 760, H = 300, pl = 46, pb = 30, cw = (W - pl) / days, bw = Math.max(4, cw * 0.62);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t("chart"))}">`;
+  for (let g = 0; g <= top; g += step) { const y = H - pb - (g / top) * (H - pb - 8); svg += `<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="#e4dccb" stroke-dasharray="${g ? "3 4" : "0"}"/><text x="${pl - 8}" y="${y + 4}" text-anchor="end" font-size="15" fill="#6c6f7a" font-family="JetBrains Mono">${g}</text>`; }
+  per.forEach((o, i) => {
+    let y = H - pb; const x = pl + i * cw + (cw - bw) / 2;
+    const date = new Date(yy, mm - 1, i + 1); const we = date.getDay() === 0 || date.getDay() === 6;
+    if (we) svg += `<rect x="${pl + i * cw}" y="8" width="${cw}" height="${H - pb - 8}" fill="#efe8da" opacity=".55"/>`;
+    S.drivers.forEach(d => {
+      const v = o[d.id]; if (!v) return;
+      const hh = v / top * (H - pb - 8); y -= hh;
+      svg += `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(1, hh - 1.5)}" rx="2" fill="${{ d1: "#14213d", d2: "#ff7a1a", d3: "#2a9d8f" }[d.id]}"><title>${esc(fmtDate(date))} · ${esc(d.name)}: ${v} km</title></rect>`;
+    });
+    if (i % (days > 20 ? 3 : 1) === 0 || i === days - 1) svg += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="15" fill="#6c6f7a" font-family="JetBrains Mono">${i + 1}</text>`;
+  });
+  svg += `</svg>`;
+
+  // vehicles
+  const vs = S.vehicles.filter(v => !ui.fVehicle || v.id === ui.fVehicle).map(v => {
+    const k = tr.filter(x => x.vehicleId === v.id).reduce((a, x) => a + x.kmEnd - x.kmStart, 0);
+    const l = fu.filter(x => x.vehicleId === v.id).reduce((a, x) => a + x.liters, 0);
+    return { v, k, l };
+  });
+  const maxK = Math.max(1, ...vs.map(o => o.k));
+
+  h += `<div class="grid2">
+    <div class="card panel chart"><div class="panel-h"><h3>${esc(t("chart"))}</h3><div class="legend">${S.drivers.filter(d => !ui.fDriver || d.id === ui.fDriver).map(d => `<span><i style="background:${driverColor(d.id)}"></i>${esc(d.name)}</span>`).join("")}</div></div>${svg}</div>
+    <div class="card panel"><div class="panel-h"><h3>${esc(t("vehicles"))}</h3></div><div class="veh">${vs.map(o => `<div class="vrow"><b>${esc(o.v.name)}<span class="plate">${esc(o.v.plate)}</span></b><span class="big">${nf(o.k)} km</span><small>${o.l ? nf(o.l, 1) + " l" : esc(t("kNoFuel"))}</small><small style="text-align:right">${o.l && o.k ? nf(o.l / o.k * 100, 1) + " " + esc(t("consumption")) : ""}</small><div class="bar"><i style="width:${o.k / maxK * 100}%"></i></div></div>`).join("")}</div></div>
+  </div>`;
+
+  // table
+  const rows = [...tr].sort((a, b) => ui.sort.k === "km" ? ((a.kmEnd - a.kmStart) - (b.kmEnd - b.kmStart)) * ui.sort.dir : a.start.localeCompare(b.start) * ui.sort.dir);
+  const shown = ui.showAll ? rows : rows.slice(0, 12);
+  const arrow = k => ui.sort.k === k ? (ui.sort.dir < 0 ? " ↓" : " ↑") : "";
+  h += `<div class="card panel"><div class="panel-h"><h3>${esc(t("trips"))} <span class="mono" style="color:var(--muted);font-size:14px">${nf(rows.length)}</span></h3>
+    <div class="actions">
+      ${wait ? `<button type="button" class="abtn" data-action="approveAll">✓ ${esc(t("approveAll"))}</button>` : ""}
+      <button type="button" class="abtn" data-action="csv" ${rows.length ? "" : "disabled"}>⤓ ${esc(t("csv"))}</button>
+      <button type="button" class="abtn dark" data-action="print" ${rows.length ? "" : "disabled"}>🖨 ${esc(t("print"))}</button>
+    </div></div>
+    <div class="note"><span class="livedot" aria-hidden="true"></span>${esc(t("live"))}</div>`;
+  if (!rows.length) h += `<div class="empty mt">${esc(t("noRows"))}</div>`;
+  else {
+    h += `<div class="tbl-wrap"><table><thead><tr>
+      <th><button type="button" data-action="sort" data-v="start">${esc(t("date"))}${arrow("start")}</button></th><th>${esc(t("driver"))}</th><th>${esc(t("route"))}</th><th class="hide-sm">${esc(t("vehicle"))}</th><th class="num hide-sm">${esc(t("odo"))}</th><th class="num"><button type="button" data-action="sort" data-v="km">${esc(t("km"))}${arrow("km")}</button></th><th>${esc(t("state"))}</th>
+    </tr></thead><tbody>`;
+    for (const x of shown) {
+      const d = drv(x.driverId), v = veh(x.vehicleId);
+      h += `<tr class="${ui.flash === x.id ? "flash" : ""}">
+        <td>${esc(fmtDate(x.start, { weekday: "short", day: "numeric", month: "numeric" }))}<span class="sub mono">${fmtTime(x.start)}–${fmtTime(x.end)}</span></td>
+        <td style="white-space:nowrap"><span class="who-dot" style="background:${driverColor(d.id)}"></span>${esc(d.name)}</td>
+        <td>${esc(placeName(x.from))} → ${esc(placeName(x.to))}<span class="sub">${esc(t("purposes")[x.purpose] || "")}</span></td>
+        <td class="hide-sm"><span class="mono">${esc(v.plate)}</span></td>
+        <td class="num hide-sm">${nf(x.kmStart)}<span class="sub">${nf(x.kmEnd)}</span></td>
+        <td class="num"><b>${nf(x.kmEnd - x.kmStart)}</b></td>
+        <td>${x.approved ? `<span class="pill ok">✓ ${esc(t("approved"))}</span>` : `<button type="button" class="pill wait" data-action="approve" data-v="${x.id}">${esc(t("approve"))}</button>`}</td>
+      </tr>`;
+    }
+    h += `</tbody></table></div>`;
+    if (rows.length > 12) h += `<div class="more"><button type="button" class="abtn" data-action="toggleAll">${esc(ui.showAll ? t("showLess") : t("showAll", { n: nf(rows.length) }))}</button></div>`;
+  }
+  h += `</div>`;
+  $("#office").innerHTML = h;
+}
+
+/* ============ export / print ============ */
+function csv() {
+  const { tr } = filtered();
+  const rows = [[t("date"), "Start", "Ende/Koniec", t("driver"), t("vehicle"), "ŠPZ/Kennz.", t("from"), t("to"), t("purpose"), t("kmStart"), t("kmEnd"), t("km"), t("state")]];
+  [...tr].sort((a, b) => a.start.localeCompare(b.start)).forEach(x => {
+    const v = veh(x.vehicleId);
+    rows.push([fmtDate(x.start, { day: "2-digit", month: "2-digit", year: "numeric" }), fmtTime(x.start), fmtTime(x.end), drv(x.driverId).name, v.name, v.plate, placeName(x.from), placeName(x.to), t("purposes")[x.purpose] || "", x.kmStart, x.kmEnd, x.kmEnd - x.kmStart, x.approved ? t("approved") : t("kWait")]);
+  });
+  const body = rows.map(r => r.map(c => { const s = String(c); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(";")).join("\r\n");
+  const blob = new Blob(["﻿" + body], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `jazdy-${ui.month}.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(t("tCsv"));
+}
+function printReport() {
+  const { tr, fu } = filtered();
+  const rows = [...tr].sort((a, b) => a.start.localeCompare(b.start));
+  const km = rows.reduce((a, x) => a + x.kmEnd - x.kmStart, 0);
+  const lit = fu.reduce((a, x) => a + x.liters, 0), cost = fu.reduce((a, x) => a + x.price, 0);
+  const who = ui.fDriver ? drv(ui.fDriver).name : t("allDrivers");
+  const car = ui.fVehicle ? veh(ui.fVehicle).plate + " · " + veh(ui.fVehicle).name : t("allVehicles");
+  let h = `<div class="rh"><div><h1>${esc(t("repTitle"))}</h1><div>${esc(monthLabel(ui.month))}</div></div><div style="text-align:right">${esc(t("repDriver"))}: <b>${esc(who)}</b><br>${esc(t("repVehicle"))}: <b>${esc(car)}</b></div></div>
+  <table><thead><tr><th>${esc(t("date"))}</th><th>${esc(t("driver"))}</th><th>${esc(t("vehicle"))}</th><th>${esc(t("route"))}</th><th>${esc(t("purpose"))}</th><th class="num">${esc(t("odo"))}</th><th class="num">${esc(t("km"))}</th></tr></thead><tbody>`;
+  for (const x of rows) h += `<tr><td>${esc(fmtDate(x.start, { day: "2-digit", month: "2-digit" }))} ${fmtTime(x.start)}–${fmtTime(x.end)}</td><td>${esc(drv(x.driverId).name)}</td><td>${esc(veh(x.vehicleId).plate)}</td><td>${esc(placeName(x.from))} → ${esc(placeName(x.to))}</td><td>${esc(t("purposes")[x.purpose] || "")}</td><td class="num">${nf(x.kmStart)} – ${nf(x.kmEnd)}</td><td class="num">${nf(x.kmEnd - x.kmStart)}</td></tr>`;
+  h += `<tr class="tot"><td colspan="6">${esc(t("repTotal"))} · ${nf(rows.length)} ${esc(t("statTrips"))} · ${esc(t("kFuel"))}: ${nf(lit, 1)} l / ${eur(cost)}</td><td class="num">${nf(km)}</td></tr></tbody></table>
+  <div class="sign"><div>${esc(t("repSignD"))}</div><div>${esc(t("repSignO"))}</div></div>`;
+  $("#report").innerHTML = h;
+  window.print();
+}
+
+/* ============ actions ============ */
+function validateStart() {
+  const e = {}; const vId = ui.form.vehicleId || myVehicle();
+  const k = num(ui.form.kmStart ?? lastOdo(vId)); const last = lastOdo(vId);
+  if (!String(ui.form.kmStart ?? last).trim() || !Number.isFinite(k)) e.kmStart = t("eKm");
+  else if (k < last) e.kmStart = t("eKmBack", { n: nf(last) });
+  const from = (ui.form.from ?? placeName(lastPlace(S.me))).trim();
+  if (!from) e.from = t("eReq");
+  return { e, vId, k, from };
+}
+function toPlaceKey(s) { return s === t("depot") || s === T.sk.depot || s === T.de.depot ? "HQ" : s; }
+function focusFirstError() { const el = document.querySelector('[aria-invalid="true"]'); if (el) el.focus(); }
+
+const actions = {
+  lang(v) { S.lang = v; save(); renderAll(); },
+  view(v) { ui.view = v; document.body.dataset.view = v; renderTabs(); if (window.matchMedia("(max-width:980px)").matches) window.scrollTo({ top: 0, behavior: "smooth" }); },
+  reset() { if (!confirm(t("resetQ"))) return; const lang = S.lang; S = seed(); S.lang = lang; ui.form = {}; ui.errors = {}; save(); renderAll(); toast(t("tReset")); },
+  pickVeh(v) { ui.form.vehicleId = v; ui.form.kmStart = String(lastOdo(v)); delete ui.errors.kmStart; renderDriver(); },
+  pickPurpose(v) { ui.purpose = v; renderDriver(); },
+  gps() {
+    const btn = document.querySelector('[data-action="gps"]');
+    if (!navigator.geolocation) { ui.errors.from = t("locFail"); renderDriver(); return; }
+    btn.textContent = "📍 " + t("locating"); btn.disabled = true;
+    navigator.geolocation.getCurrentPosition(p => {
+      ui.form.from = `GPS ${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`; delete ui.errors.from; renderDriver();
+    }, () => { ui.errors.from = t("locFail"); renderDriver(); focusFirstError(); }, { timeout: 8000, maximumAge: 60000 });
+  },
+  startTrip() {
+    const { e, vId, k, from } = validateStart();
+    ui.errors = e; if (Object.keys(e).length) { renderDriver(); focusFirstError(); return; }
+    S.active = { driverId: S.me, vehicleId: vId, start: new Date().toISOString(), from: toPlaceKey(from), kmStart: k, purpose: ui.purpose };
+    ui.form = {}; save(); renderDriver(); toast(t("tStart"));
+    setTimeout(() => { const el = $("#f-to"); if (el) el.focus({ preventScroll: true }); }, 50);
+  },
+  finish() {
+    const a = S.active; const e = {};
+    const to = (ui.form.to ?? "").trim(); const k = num(ui.form.kmEnd);
+    if (!to) e.to = t("eReq");
+    if (!String(ui.form.kmEnd ?? "").trim() || !Number.isFinite(k)) e.kmEnd = t("eKm");
+    else if (k <= a.kmStart) e.kmEnd = t("eKmLow", { n: nf(a.kmStart) });
+    else if (k - a.kmStart > 1500) e.kmEnd = t("eBig");
+    ui.errors = e; if (Object.keys(e).length) { renderDriver(); focusFirstError(); return; }
+    const end = new Date(); const start = new Date(a.start);
+    const tr = { id: uid(), driverId: a.driverId, vehicleId: a.vehicleId, start: a.start, end: (end - start < 60000 ? new Date(start.getTime() + 60000) : end).toISOString(), from: a.from, to: toPlaceKey(to), kmStart: a.kmStart, kmEnd: k, purpose: a.purpose, approved: false };
+    S.trips.push(tr); S.active = null; ui.form = {}; ui.flash = tr.id; ui.month = monthKey(tr.start); ui.fDriver = ""; ui.fVehicle = ""; ui.sort = { k: "start", dir: -1 };
+    save(); renderAll(); toast(t("tSaved"));
+    setTimeout(() => { ui.flash = null; }, 2500);
+  },
+  cancelTrip() { if (!confirm(t("cancelQ"))) return; S.active = null; ui.form = {}; ui.errors = {}; save(); renderDriver(); toast(t("tCancel")); },
+  openFuel() { ui.lastFocus = document.activeElement; ui.sheet = true; ui.errors = {}; renderSheet(); setTimeout(() => { const el = $("#f-liters"); if (el) el.focus(); }, 60); },
+  closeSheet() { ui.sheet = false; ["liters", "price", "fkm", "station", "fVehicle"].forEach(k => delete ui.form[k]); ui.errors = {}; document.querySelectorAll(".scrim").forEach(n => n.remove()); if (ui.lastFocus && document.contains(ui.lastFocus)) ui.lastFocus.focus(); },
+  closeSheetBg(_, ev) { if (ev.target.classList.contains("scrim")) actions.closeSheet(); },
+  pickFVeh(v) { ui.form.fVehicle = v; ui.form.fkm = String(lastOdo(v)); renderSheet(); },
+  saveFuel() {
+    const e = {}; const l = num(ui.form.liters), p = num(ui.form.price), k = num(ui.form.fkm);
+    const vId = ui.form.fVehicle || (S.active && S.active.driverId === S.me ? S.active.vehicleId : myVehicle());
+    if (!(l > 0) || l > 1500) e.liters = t("eNum");
+    if (!(p > 0) || p > 5000) e.price = t("eNum");
+    const last = lastOdo(vId);
+    if (!String(ui.form.fkm ?? last).trim() || !Number.isFinite(ui.form.fkm === undefined ? last : k)) e.fkm = t("eKm");
+    else if ((ui.form.fkm === undefined ? last : k) < last) e.fkm = t("eKmBack", { n: nf(last) });
+    ui.errors = e; if (Object.keys(e).length) { renderSheet(); focusFirstError(); return; }
+    S.fuel.push({ id: uid(), driverId: S.me, vehicleId: vId, date: new Date().toISOString(), liters: Math.round(l * 10) / 10, price: Math.round(p * 100) / 100, km: ui.form.fkm === undefined ? last : k, station: (ui.form.station || "").trim() });
+    save(); actions.closeSheet(); renderAll(); toast(t("tFuel"));
+  },
+  month(v) { ui.month = shiftMonth(ui.month, Number(v)); ui.showAll = false; renderOffice(); },
+  sort(v) { ui.sort = ui.sort.k === v ? { k: v, dir: -ui.sort.dir } : { k: v, dir: -1 }; renderOffice(); },
+  toggleAll() { ui.showAll = !ui.showAll; renderOffice(); },
+  approve(id) { const x = S.trips.find(r => r.id === id); if (!x) return; x.approved = true; save(); renderOffice(); renderDriver(); toast(t("tApproved")); },
+  approveAll() { const { tr } = filtered(); const w = tr.filter(x => !x.approved); w.forEach(x => x.approved = true); save(); renderOffice(); renderDriver(); toast(t("tApprovedAll", { n: w.length })); },
+  csv() { csv(); },
+  print() { printReport(); }
+};
+
+document.addEventListener("click", ev => {
+  const el = ev.target.closest("[data-action]"); if (!el || el.disabled) return;
+  const fn = actions[el.dataset.action]; if (fn) fn(el.dataset.v, ev);
+});
+document.addEventListener("input", ev => {
+  const el = ev.target; if (!el.name || !el.classList.contains("inp")) return;
+  ui.form[el.name] = el.value;
+  if (ui.errors[el.name]) { delete ui.errors[el.name]; el.removeAttribute("aria-invalid"); const er = document.getElementById("e-" + el.name); if (er) er.remove(); }
+  if (el.name === "kmEnd" && S.active) {
+    const d = num(el.value) - S.active.kmStart; const o = $("#dist"); if (o) o.textContent = nf(d > 0 ? d : 0) + " km";
+  }
+});
+document.addEventListener("change", ev => {
+  const el = ev.target, k = el.dataset.change; if (!k) return;
+  if (k === "me") { S.me = el.value; ui.form = {}; ui.errors = {}; save(); renderDriver(); }
+  else { ui[k] = el.value; ui.showAll = false; renderOffice(); }
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape" && ui.sheet) actions.closeSheet();
+  if (ev.key === "Enter" && ev.target.classList && ev.target.classList.contains("inp")) {
+    if (ui.sheet) actions.saveFuel(); else if (S.active && S.active.driverId === S.me) actions.finish(); else actions.startTrip();
+  }
+});
+// keep tabs in sync if the demo is open in two windows (e.g. phone + PC on same device)
+window.addEventListener("storage", e => { if (e.key === KEY && e.newValue) { try { S = JSON.parse(e.newValue); renderAll(); } catch (err) { /* ignore */ } } });
+
+function renderTabs() {
+  document.querySelectorAll('[data-action="view"]').forEach(b => { if (b.closest(".tabs")) b.setAttribute("aria-pressed", String(b.dataset.v === ui.view)); });
+}
+function renderStatic() {
+  document.documentElement.lang = S.lang;
+  document.querySelectorAll("[data-t]").forEach(n => { n.textContent = t(n.dataset.t); });
+  document.querySelectorAll("[data-t-html]").forEach(n => { n.innerHTML = t(n.dataset.tHtml); }); // trusted static strings only
+  document.querySelectorAll('[data-action="lang"]').forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === S.lang)));
+  document.title = S.lang === "de" ? "Fahrten – digitales Fahrtenbuch" : "Jazdy – digitálne stazky";
+}
+function renderAll() { renderStatic(); renderTabs(); renderDriver(); renderOffice(); }
+try { if (new URLSearchParams(location.search).get("lang") === "de" && !localStorage.getItem(KEY)) S.lang = "de"; } catch (e) { if (new URLSearchParams(location.search).get("lang") === "de") S.lang = "de"; }
+renderAll(); save();
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
